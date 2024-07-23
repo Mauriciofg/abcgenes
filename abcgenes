@@ -1,0 +1,262 @@
+library(shiny)
+library(DT)
+
+# Cargar los datos desde el archivo CSV
+data <- read.csv("base_de_datos_17_06_2024.csv")
+
+# Define la interfaz de usuario
+ui <- fluidPage(
+  titlePanel(
+    tags$h2(
+      tags$img(src = "logo.png", style = "height: 60px; margin-right: 20px;"),
+      tags$b("ABCgenes:"),
+      "Arsenic-related bladder cancer genes database", 
+      style = "font-size: 20px;"
+    )
+  ), 
+  hr(),
+  tabsetPanel(
+    tabPanel("Home",
+             fluidRow(
+               column(width = 12, h5("¡Welcome to ABCgenes!", style = "font-size: 20px;")),
+               column(width = 12, h5("ABCgenes provides access to a database of genes and variants associated with arsenic-related bladder cancer.", style = "font-size: 15px;")),
+               column(width = 12, h5("Our database comprises a collection of publications that focus on the genetic analysis of bladder cancer induced by arsenic exposure.", style = "font-size: 15px;")),
+                              column(width = 12, h5("Please use the 'Search' tab to find specific information about genes.", style = "font-size: 15px;")),
+               column(width = 12, h5(HTML("<b>How to cite:</b> "), HTML("<i>Fernández et al. (2024). ABCgenes: A database for Arsenic-related bladder cancer genes. Journal of XXXXX. DOi 123456789.10</i>"), style = "font-size: 15px; text-align: right;"))
+               
+                              ),
+             hr(), # Línea divisoria
+             fluidRow(
+               column(width = 12, h2("General ABCgenes statistics:", style = "font-size: 20px;"))
+             ),
+             fluidRow(
+               column(width = 6,
+                      img(src = "table.png", style = "width:100%; margin-bottom:20px;")),
+               column(width = 6,
+                      img(src = "pie_1.png", style = "width:100%; margin-bottom:20px;"))
+             ),
+             fluidRow(
+               column(width = 6,
+                      img(src = "enrichment_of_go_terms.png", style = "width:100%; margin-top:20px; margin-bottom:20px;")),
+               column(width = 6,
+                      img(src = "pie_2.png", style = "width:100%; margin-top:20px; margin-bottom:20px;"))
+             )
+    ),
+    tabPanel("Search",
+             fluidRow(
+               column(width = 12, h5(tags$b("ABCgenes"),"is a web tool developed in Shiny that provides information on As-related bladder cancer genes and variants.")),
+               column(width = 12, h5("Search for multiple genes by separating them with a comma.", style = "font-size: 10px;")),
+               column(width = 12, h5("BCgenes does not differentiate between uppercase and lowercase letters.", style = "font-size: 10px;")),
+               column(width = 12, h5("No_data_available: Indicate that data is not available at BCgenes, but you must check the bibliography", style = "font-size: 10px;"))
+             ),
+             fluidRow(
+               column(width = 6, 
+                      div(
+                        style = "background-color: #FFC107; border-radius: 5px; padding: 10px;",
+                        textInput("gene_search", "Enter the gene ID:", ""),
+                        actionButton("search_left", "Search", style = "background-color: #eaeaea; color: black; margin-top: 10px;"),
+                        img(src = "imagen5.png", style = "margin-top: 20px; width: 100%;")
+                      )
+               ),
+               column(width = 6,
+                      div(
+                        style = "background-color: #FFB300; border-radius: 5px; padding: 10px;",
+                        fluidRow(
+                          column(width = 8, 
+                                 selectInput("publication_type", "Filter by Publication Type:",
+                                             choices = c("All", "Experimental", "Only data analysis", "Experimental and data analysis", "Review"))
+                          ),
+                          column(width = 4,
+                                 actionButton("search_top", "Search", style = "background-color: #eaeaea; color: black; margin-top: 25px;") 
+                          )
+                        ),
+                        selectInput("organism", "Filter by Organism:",
+                                    choices = c("All", "Human", "Rat", "Human/mice", "No_data")),
+                        selectInput("way_of_exposure", "Filter by Way of Exposure:",
+                                    choices = c("All", "Drinking.water", "Sodium arsenite", "No_data", "Tobacco", "Drinking water", "Ethnic-Multigenerational exposure", 
+                                                "Dimethylarsinic", "Inorganic arsenic", "Sodium m-arsenite; Monomethylarsonous acid; Dimethylarsinous.", "Diodomethylarsine (MMA III)", 
+                                                "Arsenite", "Arsenic trioxide", "Arsenic (As+3)", "Dimethylarsinic acid", "Drinking water; Tobacco", "Diiodomethylarsine", 
+                                                "Arsenic", "As (III); MMA (III)", "Sodium arsenate", "As (III)", "MMA(III)", "Water", "As (III) oxide")),
+                        selectInput("sample_type", "Filter by Sample Type:",
+                                    choices = c("All", "Blood", "Cell line", "No_data", "Tissue; Cell line")),
+                        selectInput("sample_origin", "Filter by Sample Origin:",
+                                    choices = c("All", "Cell lines", "Patients")),
+                        selectInput("sequencing_method", "Filter by Sequencing Method:",
+                                    choices = c("All", "Whole_exome_sequencing", "No_data_available", "Full_whole_sequencing")),
+                        selectInput("Contains_variants_information", "Contains Variants Information:",
+                                    choices = c("All", "Yes", "No")),
+                        selectInput("patients_info", "Patients Information:",
+                                    choices = c("All", "Yes", "No"))
+                      )
+               )
+             ),
+             fluidRow(
+               column(width = 12, DTOutput("results_table")),
+               conditionalPanel(
+                 condition = "output.results_table",
+                 downloadButton("download_csv", "Download as CSV")
+               ),
+               conditionalPanel(
+                 condition = "!output.results_table",
+                 div("ARBCgene : Arsenic-related bladder cancer genes database")
+               )
+             )
+    )
+  )
+)
+
+# Define el servidor
+server <- function(input, output, session) {
+  
+  # Función para buscar genes
+  observeEvent(input$search, {
+    search_term <- tolower(input$gene_search)
+    filtered_data <- data[grepl(search_term, tolower(data[,1])), ]
+    
+    if (input$publication_type != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Publication_type"] == input$publication_type, ]
+    }
+    if (input$organism != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Organism"] == input$organism, ]
+    }
+    if (input$way_of_exposure != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Way_of_exposure"] == input$way_of_exposure, ]
+    }
+    if (input$sample_type != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Sample_type"] == input$sample_type, ]
+    }
+    if (input$sample_origin != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Sample_origin"] == input$sample_origin, ]
+    }
+    if (input$sequencing_method != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Sequencing_Method"] ==       input$sequencing_method, ]
+    }
+    if (input$Contains_variants_information != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Contains_variants_information"] == input$Contains_variants_information, ]
+    }
+    if (input$patients_info != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Patients_information"] == input$patients_info, ]
+    }
+    
+    output$results_table <- renderDT({
+      datatable(filtered_data, 
+                options = list(pageLength = 5),
+                rownames = FALSE)
+    })
+  })
+  
+  observeEvent(input$search_top, {
+    search_term <- tolower(input$gene_search)
+    filtered_data <- data[grepl(search_term, tolower(data[,1])), ]
+    
+    if (input$publication_type != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Publication_type"] == input$publication_type, ]
+    }
+    if (input$organism != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Organism"] == input$organism, ]
+    }
+    if (input$way_of_exposure != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Way_of_exposure"] == input$way_of_exposure, ]
+    }
+    if (input$sample_type != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Sample_type"] == input$sample_type, ]
+    }
+    if (input$sample_origin != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Sample_origin"] == input$sample_origin, ]
+    }
+    if (input$sequencing_method != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Sequencing_Method"] == input$sequencing_method, ]
+    }
+    if (input$contains_variants != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Contains_variants_information"] == input$Contains_variants_information, ]
+    }
+    if (input$patients_info != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Patients_information"] == input$patients_info, ]
+    }
+    
+    output$results_table <- renderDT({
+      datatable(filtered_data, 
+                options = list(pageLength = 5),
+                rownames = FALSE)
+    })
+  })
+  
+  observeEvent(input$search_left, {
+    search_term <- tolower(input$gene_search)
+    filtered_data <- data[grepl(search_term, tolower(data[,1])), ]
+    
+    if (input$publication_type != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Publication_type"] == input$publication_type, ]
+    }
+    if (input$organism != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Organism"] == input$organism, ]
+    }
+    if (input$way_of_exposure != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Way_of_exposure"] == input$way_of_exposure, ]
+    }
+    if (input$sample_type != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Sample_type"] == input$sample_type, ]
+    }
+    if (input$sample_origin != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Sample_origin"] == input$sample_origin, ]
+    }
+    if (input$sequencing_method != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Sequencing_Method"] == input$sequencing_method, ]
+    }
+    if (input$Contains_variants_information != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Contains_variants_information"] == input$Contains_variants_information, ]
+    }
+    if (input$patients_info != "All") {
+      filtered_data <- filtered_data[filtered_data[,"Patients_information"] == input$patients_info, ]
+    }
+    
+    output$results_table <- renderDT({
+      datatable(filtered_data, 
+                options = list(pageLength = 5),
+                rownames = FALSE)
+    })
+  })
+  
+  # Descargar la tabla como CSV
+  output$download_csv <- downloadHandler(
+    filename = function() {
+      paste("results_table", ".csv", sep="")
+    },
+    content = function(file) {
+      search_term <- tolower(input$gene_search)
+      filtered_data <- data[grepl(search_term, tolower(data[,1])), ]
+      
+      if (input$publication_type != "All") {
+        filtered_data <- filtered_data[filtered_data[,"Publication_type"] == input$publication_type, ]
+      }
+      if (input$organism != "All") {
+        filtered_data <- filtered_data[filtered_data[,"Organism"] == input$organism, ]
+      }
+      if (input$way_of_exposure != "All") {
+        filtered_data <- filtered_data[filtered_data[,"Way_of_exposure"] == input$way_of_exposure, ]
+      }
+      if (input$sample_type != "All") {
+        filtered_data <- filtered_data[filtered_data[,"Sample_type"] == input$sample_type, ]
+      }
+      if (input$sample_origin != "All") {
+        filtered_data <- filtered_data[filtered_data[,"Sample_origin"] == input$sample_origin, ]
+      }
+      if (input$sequencing_method != "All") {
+        filtered_data <- filtered_data[filtered_data[,"Sequencing_Method"] == input$sequencing_method, ]
+      }
+      if (input$Contains_variants_information != "All") {
+        filtered_data <- filtered_data[filtered_data[,"Contains_variants_information"] == input$Contains_variants_information, ]
+      }
+      if (input$patients_info != "All") {
+        filtered_data <- filtered_data[filtered_data[,"Patients_information"] == input$patients_info, ]
+      }
+      
+      write.csv(filtered_data, file, row.names = FALSE, quote = FALSE)
+    }
+  )
+}
+
+# Ejecutar la aplicación
+shinyApp(ui = ui, server = server)
+
+                                       
